@@ -1,9 +1,21 @@
+import random
+import numpy as np
 import torch
 from torch import nn
-from CopyTaskModel import CopyTaskModel
+from OfficialTransformer import OfficialTransformer
+from MyTransformer import MyTransformer
 from generate_dataset import generate_random_batch, get_key_padding_mask
-from args import max_length, pad, bos, eos, d_model, vocab_size, nhead, num_layers, dropout, batch_size, learning_rate, \
-    epoch, log_step, device
+from args import seed, max_length, pad, bos, eos, d_model, vocab_size, nhead, num_layers, dropout, batch_size, \
+    learning_rate, epoch, log_step, device
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def train(model, batch_size, max_length, learning_rate, log_step):
@@ -107,6 +119,8 @@ def evaluate(model, max_length):
 
 
 if __name__ == '__main__':
-    model = CopyTaskModel(vocab_size, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
+    seed_everything(seed)
+    # model = OfficialTransformer(vocab_size, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
+    model = MyTransformer(vocab_size, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
     train(model, batch_size, max_length, learning_rate, log_step)
     evaluate(model, max_length)

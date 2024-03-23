@@ -1,14 +1,16 @@
 import torch
 
+seed = 42
+
 max_length = 16
 pad = 0
 bos = 8
 eos = 9
 
-d_model = 128
+d_model = 512
 vocab_size = 10
-nhead = 4
-num_layers = 2
+nhead = 8
+num_layers = 3
 dropout = 0.1
 
 batch_size = 4

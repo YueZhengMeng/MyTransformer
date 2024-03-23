@@ -1,13 +1,11 @@
-import math
 import torch
 from torch import nn
-from generate_dataset import get_key_padding_mask
 
 
 class PositionalEncoding(nn.Module):
     """Implement the PE function."""
 
-    def __init__(self, d_model, dropout, max_len=5000):
+    def __init__(self, d_model=512, dropout=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -16,7 +14,7 @@ class PositionalEncoding(nn.Module):
         # 初始化一个tensor [[0, 1, 2, 3, ...]]
         position = torch.arange(0, max_len).unsqueeze(1)
         # 这里就是sin和cos括号中的内容，通过e和ln进行了变换
-        div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))
+        div_term = torch.exp(torch.arange(0, d_model, 2) * -(torch.log(torch.tensor(10000.0)) / d_model))
         # 计算PE(pos, 2i)
         pe[:, 0::2] = torch.sin(position * div_term)
         # 计算PE(pos, 2i+1)
@@ -28,18 +26,15 @@ class PositionalEncoding(nn.Module):
         self.register_buffer("pe", pe)
 
     def forward(self, x):
-        """
-        x 为embedding后的inputs，例如(1,7,128)，batch size为1，句长为7，单词维度为128
-        """
         # 将x和positional encoding相加。
         x = x + self.pe[:, : x.size(1)].requires_grad_(False)
         return self.dropout(x)
 
 
-class CopyTaskModel(nn.Module):
+class OfficialTransformer(nn.Module):
 
     def __init__(self, vocab_size, d_model=128, nhead=8, num_layers=6, dropout=0.1):
-        super(CopyTaskModel, self).__init__()
+        super(OfficialTransformer, self).__init__()
 
         # 定义词向量，词典数为10。
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
