@@ -21,7 +21,8 @@ def seed_everything(seed):
 def train(model, batch_size, max_length, learning_rate, log_step):
     # 设置model为训练模式
     model = model.train()
-    # 定义损失函数
+    # 定义损失函数，这样可以设置ignore_index=pad，实现不计算pad token的loss
+    # 但这种方法不够灵活，不能mask掉其他token，后面会使用更加灵活的mask方法
     criteria = nn.CrossEntropyLoss()
     # 定义优化器
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -55,18 +56,10 @@ def train(model, batch_size, max_length, learning_rate, log_step):
         # 将结果送给最后的线性层进行预测
         # 用每一个词向量作为预测的输入，预测下一个词
         out = model.predictor(out)
-        """
-        计算损失。
-        由于训练时我们的是对所有的输出都进行预测，所以需要对out进行reshape一下。
-        取出每个batch的有效token（非pad），然后计算loss。
-        """
-        # 先取出第一个batch的有效token的预测logits和标签
-        predict = out[0][:n_tokens[0], :]
-        target = tgt_y[0][:n_tokens[0]]
-        # 再拼接该batch其他的有效token的预测logits和标签
-        for i in range(1, batch_size):
-            predict = torch.cat([predict, out[i][:n_tokens[i], :]], dim=0)
-            target = torch.cat([target, tgt_y[i][:n_tokens[i]]], dim=0)
+        # 只计算有效token的loss，注意这里mask是要保留的token，所以用~运算符取反
+        loss_mask = ~tgt_key_padding_mask.view(-1)
+        predict = out.view(-1, vocab_size)[loss_mask]
+        target = tgt_y.view(-1)[loss_mask]
         # 计算梯度
         loss = criteria(predict, target)
         # 反向传播
