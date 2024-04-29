@@ -9,17 +9,21 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        # 初始化Shape为(max_len, d_model)的PE (positional encoding)
+        # 初始化Shape为(max_len, d_model)的PE(positional encoding)
         pe = torch.zeros(max_len, d_model)
         # 初始化一个tensor [[0, 1, 2, 3, ...]]
         position = torch.arange(0, max_len).unsqueeze(1)
-        # 这里就是sin和cos括号中的内容，通过e和ln进行了变换
+        # 计算公式中的 1/(10000^(2i/d_model))，用公式e^(lnx) = x 换底
+        # 1/(10000^(2i/d_model)) = 1/(e^(2i/d_model * ln(10000)))
+        #                        = e^(-2i/d_model * ln(10000))
+        #                        = e^(2i * -ln(10000) / d_model)
+        # 最终得到一个 d_model/2 维的向量
         div_term = torch.exp(torch.arange(0, d_model, 2) * -(torch.log(torch.tensor(10000.0)) / d_model))
         # 计算PE(pos, 2i)
         pe[:, 0::2] = torch.sin(position * div_term)
         # 计算PE(pos, 2i+1)
         pe[:, 1::2] = torch.cos(position * div_term)
-        # 为了方便计算，在最外面在unsqueeze出一个batch
+        # 为了后续与word_embedding相加,在最外面在unsqueeze出一个batch_size维
         pe = pe.unsqueeze(0)
         # 如果一个参数不参与梯度下降，但又希望保存model的时候将其保存下来
         # 这个时候就可以用register_buffer
@@ -27,7 +31,10 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # 将x和positional encoding相加。
-        x = x + self.pe[:, : x.size(1)].requires_grad_(False)
+        # 取前seq_len个位置的positional encoding
+        # x的shape是(batch_size, seq_len, d_model)
+        # pe的shape是(1, max_len, d_model)
+        x = x + self.pe[:, : x.size(1), :].requires_grad_(False)
         return self.dropout(x)
 
 
@@ -36,17 +43,17 @@ class OfficialTransformer(nn.Module):
     def __init__(self, vocab_size, d_model=128, nhead=8, num_layers=6, dropout=0.1):
         super(OfficialTransformer, self).__init__()
 
-        # 定义词向量，词典数为10。
+        # 定义词向量编码
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
-        # 定义位置编码器
+        # 定义位置编码
         self.positional_encoding = PositionalEncoding(d_model, dropout=dropout)
-        # 定义Transformer。超参是我拍脑袋想的
+        # 定义Transformer
         self.transformer = nn.Transformer(d_model=d_model, nhead=nhead, num_encoder_layers=num_layers,
                                           num_decoder_layers=num_layers,
                                           dim_feedforward=d_model * 4,
                                           dropout=dropout,
                                           batch_first=True)
-        # 定义最后的线性层，这里并没有用Softmax，因为后面的CrossEntropyLoss中自带了
+        # 定义最后的线性层
         self.predictor = nn.Linear(d_model, vocab_size)
 
     def forward(self, src, tgt, tgt_mask, src_key_padding_mask, tgt_key_padding_mask):

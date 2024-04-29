@@ -9,17 +9,21 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        # 初始化Shape为(max_len, d_model)的PE (positional encoding)
+        # 初始化Shape为(max_len, d_model)的PE(positional encoding)
         pe = torch.zeros(max_len, d_model)
         # 初始化一个tensor [[0, 1, 2, 3, ...]]
         position = torch.arange(0, max_len).unsqueeze(1)
-        # 这里就是sin和cos括号中的内容，通过e和ln进行了变换
+        # 计算公式中的 1/(10000^(2i/d_model))，用公式e^(lnx) = x 换底
+        # 1/(10000^(2i/d_model)) = 1/(e^(2i/d_model * ln(10000)))
+        #                        = e^(-2i/d_model * ln(10000))
+        #                        = e^(2i * -ln(10000) / d_model)
+        # 最终得到一个 d_model/2 维的向量
         div_term = torch.exp(torch.arange(0, d_model, 2) * -(torch.log(torch.tensor(10000.0)) / d_model))
         # 计算PE(pos, 2i)
         pe[:, 0::2] = torch.sin(position * div_term)
         # 计算PE(pos, 2i+1)
         pe[:, 1::2] = torch.cos(position * div_term)
-        # 为了方便计算，在最外面在unsqueeze出一个batch
+        # 为了后续与word_embedding相加,在最外面在unsqueeze出一个batch_size维
         pe = pe.unsqueeze(0)
         # 如果一个参数不参与梯度下降，但又希望保存model的时候将其保存下来
         # 这个时候就可以用register_buffer
@@ -27,15 +31,21 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # 将x和positional encoding相加。
-        x = x + self.pe[:, : x.size(1)].requires_grad_(False)
+        # 取前seq_len个位置的positional encoding
+        # x的shape是(batch_size, seq_len, d_model)
+        # pe的shape是(1, max_len, d_model)
+        x = x + self.pe[:, : x.size(1), :].requires_grad_(False)
         return self.dropout(x)
 
 
 class MyMultiHeadAttention(nn.Module):
     def __init__(self, d_model=512, nhead=8):
         super(MyMultiHeadAttention, self).__init__()
+
         self.d_model = d_model
         self.nhead = nhead
+        # 每个head的维度
+        # d_model维的词向量可以被视作是nhead个head_dim维的词向量的拼接
         self.head_dim = d_model // nhead
 
         # 定义Q、K、V的线性变换
@@ -63,14 +73,24 @@ class MyMultiHeadAttention(nn.Module):
         # k.transpose(-2, -1) (batch_size, nhead, head_dim, seq_len)
         scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5)
         # print(scores[0][0])
+        """
+        padding mask用于在Q@K.T/sqrt(d_k)得到的attention score矩阵中，将pad token对应的 列 全部置为-inf
+        -inf在softmax之后就会变为0，之后基于attention score矩阵对V的加权求和时，就不会加入pad token的信息(乘以0)
+        pad token对应的 行 不会被置为-inf，这是为了让pad token也能够接收其他token的信息，更新自己的词向量，得到训练
+        项目根部录下有两张相关的示意图，可以帮助理解
+        src只需要mask掉pad token
+        而tgt还需要基于causal_mask，mask掉未来的token，确保训练与推理时的任务一致性
+        """
         # 应用padding mask
         if padding_mask is not None:
+            # (batch_size, seq_len) -> (batch_size, 1, 1, seq_len) --> (batch_size, nhead, seq_len, seq_len)
             padding_mask = padding_mask.unsqueeze(1).unsqueeze(1).repeat(1, scores.shape[1], scores.shape[2], 1)
             # print(padding_mask[0][0])
             scores = scores.masked_fill(padding_mask, value=float("-inf"))
         # print(scores[0][0])
         # 应用causal mask
         if causal_mask is not None:
+            # (seq_len, seq_len) --> (batch_size, nhead, seq_len, seq_len)
             causal_mask = causal_mask.expand(scores.shape[0], scores.shape[1], causal_mask.shape[0],
                                              causal_mask.shape[1])
             # print(causal_mask[0][0])
@@ -90,11 +110,11 @@ class MyMultiHeadAttention(nn.Module):
 class MyTransformerEncoderLayer(nn.Module):
     def __init__(self, d_model=512, nhead=8, dim_feedforward=2048, dropout=0.1):
         super(MyTransformerEncoderLayer, self).__init__()
-        # 定义多头注意力层
+        # 定义self attention层
         self.self_attn = MyMultiHeadAttention(d_model, nhead)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
-        # 定义全连接层
+        # 定义feed forward层
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.activation = nn.ReLU()
         self.dropout2 = nn.Dropout(dropout)
@@ -117,14 +137,15 @@ class MyTransformerEncoderLayer(nn.Module):
 class MyTransformerDecoderLayer(nn.Module):
     def __init__(self, d_model=512, nhead=8, dim_feedforward=2048, dropout=0.1):
         super(MyTransformerDecoderLayer, self).__init__()
-        # 定义多头注意力层
+        # 定义self attention层
         self.self_attn = MyMultiHeadAttention(d_model, nhead)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
+        # 定义encoder-decoder attention层
         self.encoder_attn = MyMultiHeadAttention(d_model, nhead)
         self.dropout2 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)
-        # 定义全连接层
+        # 定义feed forward层
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.activation = nn.ReLU()
         self.dropout3 = nn.Dropout(dropout)
@@ -167,6 +188,7 @@ class MyTransformerDecoder(nn.Module):
         self.layers = nn.ModuleList([decoder_layer for _ in range(num_layers)])
 
     def forward(self, tgt, memory, tgt_mask=None, memory_key_padding_mask=None, tgt_key_padding_mask=None):
+        # decoder每一层输入的memory都是相同的，即encoder的输出
         for layer in self.layers:
             tgt = layer(tgt, memory, tgt_mask, memory_key_padding_mask, tgt_key_padding_mask)
         return tgt
@@ -176,15 +198,15 @@ class MyTransformer(nn.Module):
     def __init__(self, vocab_size=10, d_model=512, nhead=8, num_layers=6, dropout=0.1):
         super(MyTransformer, self).__init__()
 
-        # 定义词向量，词典数为10。
+        # 定义词向量编码
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
-        # 定义位置编码器
+        # 定义位置编码
         self.positional_encoding = PositionalEncoding(d_model, dropout=dropout)
         # 定义TransformerEncoder
         self.encoder = MyTransformerEncoder(d_model, nhead, num_layers, dropout)
         # 定义TransformerDecoder
         self.decoder = MyTransformerDecoder(d_model, nhead, num_layers, dropout)
-        # 定义最后的线性层，这里并没有用Softmax，因为后面的CrossEntropyLoss中自带了
+        # 定义最后的线性层
         self.predictor = nn.Linear(d_model, vocab_size)
 
     def forward(self, src, tgt, tgt_mask=None, src_key_padding_mask=None, tgt_key_padding_mask=None):
@@ -194,7 +216,7 @@ class MyTransformer(nn.Module):
         # 给src和tgt的token增加位置信息
         src = self.positional_encoding(src)
         tgt = self.positional_encoding(tgt)
-        # 将准备好的数据送给transformer
+        # 将准备好的数据送给transformer encoder和decoder
         memory = self.encoder(src, src_key_padding_mask)
         out = self.decoder(tgt, memory, tgt_mask, src_key_padding_mask, tgt_key_padding_mask)
         # 这里直接返回transformer的输出。因为训练和推理时的流程不一样，所以在模型外再进行线性层的预测。
