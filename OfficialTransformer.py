@@ -11,21 +11,23 @@ class PositionalEncoding(nn.Module):
 
         # 初始化Shape为(max_len, d_model)的PE(positional encoding)
         pe = torch.zeros(max_len, d_model)
-        # 初始化一个tensor [[0, 1, 2, 3, ...]]
+        # 初始化一个tensor [[0, 1, 2, 3, ...]],(max_len, 1)维
+        # position是每个词向量在句子中的位置下标
         position = torch.arange(0, max_len).unsqueeze(1)
-        # 计算公式中的 1/(10000^(2i/d_model))，用公式e^(lnx) = x 换底
+        # i是词向量中每个维度的位置下标
+        # 计算公式中的 1/(10000^(2i/d_model)),用公式e^(lnx) = x 换底
         # 1/(10000^(2i/d_model)) = 1/(e^(2i/d_model * ln(10000)))
         #                        = e^(-2i/d_model * ln(10000))
         #                        = e^(2i * -ln(10000) / d_model)
         # 最终得到一个 d_model/2 维的向量
         div_term = torch.exp(torch.arange(0, d_model, 2) * -(torch.log(torch.tensor(10000.0)) / d_model))
-        # 计算PE(pos, 2i)
+        # 计算PE(pos, 2i), (max_len, d_model/2)维
         pe[:, 0::2] = torch.sin(position * div_term)
-        # 计算PE(pos, 2i+1)
+        # 计算PE(pos, 2i+1), (max_len, d_model/2)维
         pe[:, 1::2] = torch.cos(position * div_term)
         # 为了后续与word_embedding相加,在最外面在unsqueeze出一个batch_size维
         pe = pe.unsqueeze(0)
-        # 如果一个参数不参与梯度下降，但又希望保存model的时候将其保存下来
+        # 如果一个参数不参与梯度下降,但又希望保存model的时候将其保存下来
         # 这个时候就可以用register_buffer
         self.register_buffer("pe", pe)
 
@@ -40,7 +42,7 @@ class PositionalEncoding(nn.Module):
 
 class OfficialTransformer(nn.Module):
 
-    def __init__(self, vocab_size, d_model=128, nhead=8, num_layers=6, dropout=0.1):
+    def __init__(self, vocab_size, d_model=512, nhead=8, num_layers=6, dropout=0.1):
         super(OfficialTransformer, self).__init__()
 
         # 定义词向量编码
@@ -71,5 +73,5 @@ class OfficialTransformer(nn.Module):
                                src_key_padding_mask=src_key_padding_mask,
                                tgt_key_padding_mask=tgt_key_padding_mask,
                                memory_key_padding_mask=src_key_padding_mask)
-        # 这里直接返回transformer的输出。因为训练和推理时的流程不一样，所以在模型外再进行线性层的预测。
+        # 这里直接返回transformer的输出。因为训练和推理时的流程不一样,所以在模型外再进行线性层的预测。
         return out

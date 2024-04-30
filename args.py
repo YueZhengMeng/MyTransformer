@@ -7,14 +7,14 @@ pad = 0
 bos = 8
 eos = 9
 
-d_model = 512
+d_model = 256
 vocab_size = 10
-nhead = 8
+nhead = 4
 num_layers = 3
 dropout = 0.1
 
 batch_size = 4
-learning_rate = 4e-4
+learning_rate = 4e-5
 epoch = 3000
 log_step = 100
 
