@@ -43,5 +43,3 @@ log_step = 100
 
 # CUDA设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# 0.05480227991938591
