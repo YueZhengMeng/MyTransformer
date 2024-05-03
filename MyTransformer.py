@@ -5,7 +5,7 @@ from torch import nn
 class PositionalEncoding(nn.Module):
     """Implement the PE function."""
 
-    def __init__(self, d_model=512, dropout=0.1, max_len=5000):
+    def __init__(self, max_len=5000, d_model=512, dropout=0.1):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -82,6 +82,8 @@ class MyMultiHeadAttention(nn.Module):
         项目根部录下有两张相关的示意图,可以帮助理解
         src只需要mask掉<pad> token
         而tgt还需要基于causal_mask,mask掉未来的token,确保训练与推理时的任务一致性
+        pytorch官方实现中，会先把key_padding_mask和causal_mask都扩展到(batch_size, nhead, seq_len, seq_len)的形状后相加
+        得到的merged_mask再加到scores上，这里为了方便阅读和理解，分开逐步处理
         """
         # 应用padding mask
         if key_padding_mask is not None:
@@ -93,7 +95,8 @@ class MyMultiHeadAttention(nn.Module):
         # 应用causal mask
         if causal_mask is not None:
             # (seq_len, seq_len) --> (batch_size, nhead, seq_len, seq_len)
-            causal_mask = causal_mask.expand(scores.shape[0], scores.shape[1], causal_mask.shape[0], causal_mask.shape[1])
+            causal_mask = causal_mask.expand(scores.shape[0], scores.shape[1], causal_mask.shape[0],
+                                             causal_mask.shape[1])
             # print(causal_mask[0][0])
             scores = scores + causal_mask
         # print(scores[0][0])
@@ -196,13 +199,13 @@ class MyTransformerDecoder(nn.Module):
 
 
 class MyTransformer(nn.Module):
-    def __init__(self, vocab_size=10, d_model=512, nhead=8, num_layers=6, dropout=0.1):
+    def __init__(self, vocab_size, max_len, d_model=512, nhead=8, num_layers=6, dropout=0.1):
         super(MyTransformer, self).__init__()
 
         # 定义词向量编码
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
         # 定义位置编码
-        self.positional_encoding = PositionalEncoding(d_model, dropout=dropout)
+        self.positional_encoding = PositionalEncoding(max_len=max_len, d_model=d_model, dropout=dropout)
         # 定义TransformerEncoder
         self.encoder = MyTransformerEncoder(d_model, nhead, num_layers, dropout)
         # 定义TransformerDecoder

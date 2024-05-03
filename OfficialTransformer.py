@@ -5,7 +5,7 @@ from torch import nn
 class PositionalEncoding(nn.Module):
     """Implement the PE function."""
 
-    def __init__(self, d_model=512, dropout=0.1, max_len=5000):
+    def __init__(self, max_len=5000, d_model=512, dropout=0.1):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -42,13 +42,13 @@ class PositionalEncoding(nn.Module):
 
 class OfficialTransformer(nn.Module):
 
-    def __init__(self, vocab_size, d_model=512, nhead=8, num_layers=6, dropout=0.1):
+    def __init__(self, vocab_size, max_len, d_model=512, nhead=8, num_layers=6, dropout=0.1):
         super(OfficialTransformer, self).__init__()
 
         # 定义词向量编码
         self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
         # 定义位置编码
-        self.positional_encoding = PositionalEncoding(d_model, dropout=dropout)
+        self.positional_encoding = PositionalEncoding(max_len=max_len, d_model=d_model, dropout=dropout)
         # 定义Transformer
         self.transformer = nn.Transformer(d_model=d_model, nhead=nhead, num_encoder_layers=num_layers,
                                           num_decoder_layers=num_layers,

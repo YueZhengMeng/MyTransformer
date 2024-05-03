@@ -25,8 +25,8 @@ def train(model, batch_size, max_length, learning_rate, log_step):
     # 定义损失函数,这样可以设置ignore_index=pad,实现不计算pad token的loss
     # 但这种方法不够灵活,不能mask掉其他token,后面会使用更加灵活的mask方法
     criteria = nn.CrossEntropyLoss()
-    # 定义优化器
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    # 定义优化器,学习率不要太高,否则模型会不收敛
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.98), eps=1e-9)
     # 定义学习率调节器
     # 前10%的total_steps预热(warm up),学习率从 max_lr/10 到 max_lr
     # 后面90%的total_steps学习率从 max_lr 线性(linear)衰减到 max_lr/10
@@ -119,7 +119,10 @@ def evaluate(model, max_length):
 
 if __name__ == '__main__':
     seed_everything(seed)
-    # model = OfficialTransformer(vocab_size, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
-    model = MyTransformer(vocab_size, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
+    # 我也不知道为什么,pytorch版本的transformer收敛速度更慢
+    # 要达到较好的效果,OfficialTransformer需要训练6000步,而MyTransformer只需要3000步
+    # 切换模型的时候,记得注释掉另一个模型的创建,并且在args.py中修改epoch数量
+    # model = OfficialTransformer(vocab_size, max_length, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
+    model = MyTransformer(vocab_size, max_length, d_model=d_model, nhead=nhead, num_layers=num_layers, dropout=dropout).to(device)
     train(model, batch_size, max_length, learning_rate, log_step)
     evaluate(model, max_length)
