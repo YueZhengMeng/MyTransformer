@@ -11,12 +11,12 @@ def get_key_padding_mask(tokens):
     return key_padding_mask
 
 
-def get_casual_mask(tokens):
+def get_causal_mask(tokens):
     """
     用于生成tgt causal mask
     """
-    casual_mask = torch.triu(torch.full((tokens.size()[-1], tokens.size()[-1]), float('-inf'), dtype=torch.float32),diagonal=1)
-    return casual_mask
+    causal_mask = torch.triu(torch.full((tokens.size()[-1], tokens.size()[-1]), float('-inf'), dtype=torch.float32),diagonal=1)
+    return causal_mask
 
 
 def generate_random_batch(batch_size, max_length):

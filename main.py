@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from OfficialTransformer import OfficialTransformer
 from MyTransformer import MyTransformer
-from generate_dataset import generate_random_batch, get_key_padding_mask, get_casual_mask
+from generate_dataset import generate_random_batch, get_key_padding_mask, get_causal_mask
 from args import seed, max_length, pad, bos, eos, d_model, vocab_size, nhead, num_layers, dropout, batch_size, \
     learning_rate, epoch, log_step, device
 
@@ -40,7 +40,7 @@ def train(model, batch_size, max_length, learning_rate, log_step):
         # 生成数据
         src, tgt, tgt_y = generate_random_batch(batch_size, max_length)
         # 生成causal mask下三角矩阵
-        tgt_mask = get_casual_mask(tgt)
+        tgt_mask = get_causal_mask(tgt)
         # 生成key_padding_mask
         src_key_padding_mask = get_key_padding_mask(src)
         tgt_key_padding_mask = get_key_padding_mask(tgt)
@@ -88,7 +88,7 @@ def evaluate(model, max_length):
     # tgt从<bos>开始,看看能不能重新输出src中的值
     tgt = torch.LongTensor([[bos]])
     # 生成mask
-    tgt_mask = get_casual_mask(tgt)
+    tgt_mask = get_causal_mask(tgt)
     src_key_padding_mask = get_key_padding_mask(src)
     # 数据送入cuda
     src = src.to(device)
@@ -107,7 +107,7 @@ def evaluate(model, max_length):
         # 和之前的预测结果拼接到一起
         tgt = torch.concat([tgt, y.unsqueeze(0)], dim=1)
         # 更新mask
-        tgt_mask = get_casual_mask(tgt)
+        tgt_mask = get_causal_mask(tgt)
         tgt_mask = tgt_mask.to(device)
         # 如果为<eos>,说明预测结束,跳出循环
         if y == eos:
